@@ -22,6 +22,7 @@ final class BookNormalizer implements NormalizerInterface, NormalizerAwareInterf
     public function __construct(
         #[Autowire(service: ReviewRepository::class)]
         private ObjectRepository $repository,
+
     ) {
     }
 

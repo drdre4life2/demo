@@ -17,6 +17,7 @@ use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Put;
 use ApiPlatform\Metadata\UrlGeneratorInterface;
 use App\Enum\BookCondition;
+use App\Enum\PromotionStatus;
 use App\Repository\BookRepository;
 use App\State\Processor\BookPersistProcessor;
 use App\State\Processor\BookRemoveProcessor;
@@ -33,6 +34,7 @@ use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Normalizer\AbstractObjectNormalizer;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Constraints as Assert;
+
 
 /**
  * A book.
@@ -65,11 +67,10 @@ use Symfony\Component\Validator\Constraints as Assert;
         ),
     ],
     normalizationContext: [
-        AbstractNormalizer::GROUPS => ['Book:read:admin', 'Enum:read'],
-        AbstractObjectNormalizer::SKIP_NULL_VALUES => true,
+        AbstractNormalizer::GROUPS => ['Book:read:admin', 'Enum:read', 'Book:read:categories', 'Book:read:slug'],
     ],
     denormalizationContext: [
-        AbstractNormalizer::GROUPS => ['Book:write'],
+        AbstractNormalizer::GROUPS => ['Book:write', 'Book:write:categories', 'Book:write:slug'], 
     ],
     collectDenormalizationErrors: true,
     security: 'is_granted("OIDC_ADMIN")',
@@ -101,6 +102,13 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 #[ORM\Entity(repositoryClass: BookRepository::class)]
 #[UniqueEntity(fields: ['book'])]
+
+/**
+ * @ApiResource(
+ *     normalizationContext={"groups"={"book:read"}},
+ *     denormalizationContext={"groups"={"book:write"}}
+ * )
+ */
 class Book
 {
     /**
@@ -140,6 +148,40 @@ class Book
     #[ORM\Column(type: Types::TEXT)]
     public string $title;
 
+    #[ORM\ManyToMany(targetEntity: Category::class, inversedBy: 'books')]
+    #[ORM\JoinTable(name: 'book_categories')]
+    #[Groups(groups: ['Book:read:admin', 'Bookmark:read', 'Book:write'])]
+
+    private $categories;
+
+    public function addCategory(Category $category): self
+    {
+        if (!$this->categories->contains($category)) {
+            $this->categories[] = $category;
+        }
+
+        return $this;
+    }
+
+    public function removeCategory(Category $category): self
+    {
+        if ($this->categories->contains($category)) {
+            $this->categories->removeElement($category);
+        }
+
+        return $this;
+    }
+
+    public function removeAllCategories(): self
+    {
+        $this->categories->clear();
+        return $this;
+    }
+
+  
+    #[ORM\OneToMany(targetEntity: Bookmark::class, mappedBy: 'book')]
+    public Collection $bookmarks; 
+    
     /**
      * @see https://schema.org/author
      */
@@ -196,10 +238,42 @@ class Book
     public function __construct()
     {
         $this->reviews = new ArrayCollection();
+        $this->categories = new ArrayCollection(); 
+
     }
 
+    
     public function getId(): Uuid
     {
         return $this->id;
     }
+
+    #[ORM\Column(type: 'boolean')]
+    public bool $isPromoted = false;
+
+
+    /**
+     * @see https://schema.org/PromotionStatus
+     */
+
+    #[Assert\NotNull]
+    #[ORM\Column(name: '`promotion_status`', type: 'string', enumType: PromotionStatus::class)]
+    #[ApiProperty(
+        types: ['https://schema.org/PromotionStatus'],
+        example: PromotionStatus::Basic->value
+    )]
+    #[Groups(['Book:read:admin', 'Book:write'])]
+    public PromotionStatus $promotionStatus;
+
+
+    #[ORM\Column(type: 'string', unique: true)]
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 5)]
+    #[Assert\Regex(pattern: '/^[a-z0-9\-]+$/', message: 'Slug must only contain lowercase letters, numbers, or hyphens.')]
+    #[Groups(['book:read', 'book:write'])]
+    #[ApiProperty(types: ['https://schema.org/slug'])]
+    public string $slug;
+
+
+
 }

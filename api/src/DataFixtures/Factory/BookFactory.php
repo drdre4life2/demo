@@ -11,6 +11,7 @@ use Zenstruck\Foundry\FactoryCollection;
 use Zenstruck\Foundry\Persistence\PersistentProxyObjectFactory;
 use Zenstruck\Foundry\Persistence\Proxy;
 use Zenstruck\Foundry\Persistence\ProxyRepositoryDecorator;
+use App\Enum\PromotionStatus;
 
 /**
  * @method        Book|Proxy                                     create(array|callable $attributes = [])
@@ -72,6 +73,9 @@ final class BookFactory extends PersistentProxyObjectFactory
     {
         return [
             'condition' => self::faker()->randomElement(BookCondition::getCases()),
+            'slug' => 'book-' . self::faker()->unique()->uuid(),
+            'isPromoted' => false,
+            'promotionStatus' => PromotionStatus::None,
         ];
     }
 
@@ -101,6 +105,7 @@ final class BookFactory extends PersistentProxyObjectFactory
                 if ($data) {
                     $datum = current($data);
                     $book->title ??= $datum['title'];
+
                     // A book can have no author
                     $book->author ??= $datum['author'] ?? self::faker()->name();
 
@@ -110,8 +115,7 @@ final class BookFactory extends PersistentProxyObjectFactory
                 // No Open Library book has been found in the array of books
                 $book->title ??= self::faker()->text();
                 $book->author ??= self::faker()->name();
-            })
-        ;
+            });
     }
 
     public static function class(): string
